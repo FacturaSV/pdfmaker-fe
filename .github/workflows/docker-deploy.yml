@@ -1,0 +1,69 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Check required files
+        run: |
+          REQUIRED_FILES=(
+            "docker-compose.yml"
+          )
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ ! -e "$file" ]; then
+              echo "Missing required file: $file"
+              exit 1
+            fi
+          done
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/github_deploy_key
+          chmod 600 ~/.ssh/github_deploy_key
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy and Run
+        run: |
+          ssh -i ~/.ssh/github_deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+            set -e
+
+            echo "===> Exportando variables desde GitHub Actions"
+            GH_USER="${{ secrets.GH_USER }}"
+            GH_TOKEN="${{ secrets.GH_TOKEN }}"
+            REPO_URL="https://\$GH_USER:\$GH_TOKEN@github.com/FacturaSV/pdfmaker-fe.git"
+
+            echo "===> Variables:"
+            echo "GH_USER: \$GH_USER"
+            echo "REPO_URL: \$REPO_URL"
+
+            PROJECT_DIR="/root/app/facturasvPDFFE"
+            if [ ! -d "\$PROJECT_DIR/.git" ]; then
+              echo "Repositorio no válido o inexistente. Clonando de nuevo..."
+              rm -rf "\$PROJECT_DIR"
+              git clone "\$REPO_URL" "\$PROJECT_DIR" || {
+                echo "Error al clonar. Revisar credenciales o URL."
+                exit 1
+              }
+            fi
+
+            cd "\$PROJECT_DIR"
+            git pull origin main || {
+              echo "Error al hacer git pull"
+              exit 1
+            }
+
+            docker compose pull
+            docker compose up -d --force-recreate --build
+
+            echo "===> Despliegue completado"
+          EOF
