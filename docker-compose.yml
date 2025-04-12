@@ -1,0 +1,26 @@
+services:
+
+  pdfmaker:
+    build:
+      dockerfile: Dockerfile
+    container_name: pdfmaker
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pdfmaker.rule=Host(`pdfmaker.facturasv.online`)"
+      - "traefik.http.routers.pdfmaker.entrypoints=websecure"
+      - "traefik.http.routers.pdfmaker.tls.certresolver=myresolver"
+      - "traefik.http.services.pdfmaker.loadbalancer.server.port=3000"
+    restart: always
+    networks:
+      - FacturaSvNetwork
+    # ports:
+    #   - "3000:3000"
+    env_file:
+      - ./.env
+    volumes:
+      - ./logos:/app/logos # Para almacenar logos
+      - ./output:/app/output # Para almacenar PDFs generados
+
+networks:
+  FacturaSvNetwork:
+    external: true

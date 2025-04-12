@@ -1,0 +1,19 @@
+[package]
+name = "pdfmaker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.8.1", features = ["http1", "http2", "json", "multipart", "macros"] } # Framework web
+tokio = { version = "1", features = ["full"] }  # Para asincronía
+serde = { version = "1", features = ["derive"] }  # Manejo de JSON
+serde_json = "1"
+qrcodegen = "1.8.0"
+image = { version = "0.25.5", features = ["png", "jpeg"] }
+printpdf = "0.7"  # Para generar PDFs
+reqwest = { version = "0.11", features = ["json", "blocking"] }  # Para hacer peticiones HTTP (Twilio)
+dotenv = "0.15"
+lopdf = "0.32"
+hyper = "1.6.0"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
