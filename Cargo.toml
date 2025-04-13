@@ -9,6 +9,7 @@ tokio = { version = "1", features = ["full"] }  # Para asincronía
 serde = { version = "1", features = ["derive"] }  # Manejo de JSON
 serde_json = "1"
 qrcodegen = "1.8.0"
+lettre = { version = "0.11.4", default-features = false, features = ["tokio1-native-tls", "smtp-transport", "builder"] }
 image = { version = "0.25.5", features = ["png", "jpeg"] }
 printpdf = "0.7"  # Para generar PDFs
 reqwest = { version = "0.11", features = ["json", "blocking"] }  # Para hacer peticiones HTTP (Twilio)

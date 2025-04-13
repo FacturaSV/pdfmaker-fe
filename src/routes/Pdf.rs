@@ -1,18 +1,46 @@
+use std::path::PathBuf;
 use axum::{Json, extract::State};
 use axum::response::IntoResponse;
 use serde::{Serializer, Deserialize, Deserializer, Serialize};
 use crate::services::pdf_service;
+use crate::services::email_service;
 
 
 
 pub async fn generate_invoice(Json(payload): Json<DteJson>) -> impl IntoResponse {
     println!("Número de control: {}", payload.identificacion.numeroControl);
 
-    let file_path = pdf_service::create_invoice_pdf(&payload);
-    Json(serde_json::json!({
-        "message": "PDF generado exitosamente",
-        "data": file_path
-    }))
+    let pdf_path = pdf_service::create_invoice_pdf(&payload);
+    let json_path = save_dte_json(&payload);
+
+    match crate::services::email_service::send_email_with_attachments(
+        &payload.remitenceEmail,
+        &pdf_path,
+        &json_path,
+        &payload,
+    ).await {
+        Ok(_) => Json(serde_json::json!({
+            "message": "PDF generado y correo enviado correctamente",
+            "pdf": pdf_path,
+            "json": json_path
+        })),
+        Err(err) => {
+            eprintln!("Error enviando el correo: {:?}", err);
+            Json(serde_json::json!({
+                "error": "PDF generado, pero no se pudo enviar el correo",
+                "pdf": pdf_path,
+                "json": json_path
+            }))
+        }
+    }
+}
+
+
+
+pub fn save_dte_json(data: &DteJson) -> PathBuf {
+    let file_name = format!("./output/{}.json", data.identificacion.codigoGeneracion);
+    std::fs::write(&file_name, serde_json::to_string_pretty(&data).unwrap()).unwrap();
+    PathBuf::from(file_name)
 }
 
 
@@ -32,6 +60,7 @@ pub struct PdfResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub  struct DteJson {
+    pub remitenceEmail: String,
     pub identificacion: Identificacion,
     pub documentoRelacionado: Option<serde_json::Value>,
     pub emisor: Emisor,

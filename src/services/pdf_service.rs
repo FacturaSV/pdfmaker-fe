@@ -1,3 +1,4 @@
+use std::fs;
 use printpdf::*;
 use std::fs::File;
 use crate::services::{footer_service, row_info_service, sub_total_service};
@@ -5,13 +6,19 @@ use crate::services::header_left_service;
 use crate::services::header_right_service;
 use crate::services::products_service;
 use std::io::{BufWriter};
+use std::path::PathBuf;
 use std::process::Command;
 use printpdf::{PdfDocument, Mm, Color};
 use crate::routes::Pdf::{DteJson, ItemDocumento};
 
-pub fn create_invoice_pdf(_data: &DteJson) -> String {
-    let file_path = "./output/output.pdf".to_string();
-    let compressed_file_path = "./output/output_compressed.pdf".to_string();
+pub fn create_invoice_pdf(_data: &DteJson) -> PathBuf {
+    let output_dir = "./output";
+    fs::create_dir_all(output_dir).unwrap_or_else(|e| {
+        eprintln!("Error creando directorio de salida: {:?}", e);
+    });
+
+    // Genera el nombre dinámico del archivo
+    let compressed_file_path = format!("{}/{}.pdf", output_dir, _data.identificacion.codigoGeneracion);
 
     // ──────────────────────────────────────────────────────────────────────────
     // 1. Dimensiones y márgenes
@@ -210,7 +217,7 @@ pub fn create_invoice_pdf(_data: &DteJson) -> String {
     // 44% de la página
     let productos = &_data.cuerpoDocumento;
     let total_items = productos.len();
-    
+
     let first_page_min_limit = 18;
 
     if total_items > first_page_min_limit {
@@ -239,10 +246,8 @@ pub fn create_invoice_pdf(_data: &DteJson) -> String {
         }
 
         let total_pages = chunks.len();
-        println!("{}", chunks.len());
 
         for (i, chunk) in chunks.iter().enumerate() {
-            println!("{}", chunk.len());
 
             let (page, layer) = if i == 0 {
                 (page1, doc.get_page(page1).get_layer(layer1))
@@ -250,7 +255,7 @@ pub fn create_invoice_pdf(_data: &DteJson) -> String {
                 let (new_page, layer_id) = doc.add_page(width, height, &format!("Layer {}", i + 1));
                 (new_page, doc.get_page(new_page).get_layer(layer_id))
             };
-            
+
             let mut height_list =   Mm(((first_page_limit as f64) * 6.6) as f32) - Mm(8.0);
             if i != 0 {
                 height_list =   Mm(((chunk.len() as f64) * 6.6) as f32) + Mm(7.0);
@@ -378,8 +383,8 @@ pub fn create_invoice_pdf(_data: &DteJson) -> String {
 
 
 
-
-    doc.save(&mut BufWriter::new(File::create(&file_path).unwrap())).unwrap();
+    let raw_pdf_path = format!("{}/{}_raw.pdf", output_dir, _data.identificacion.codigoGeneracion);
+    doc.save(&mut BufWriter::new(File::create(&raw_pdf_path).unwrap())).unwrap();
 
 
     // // ──────────────────────────────────────────────────────────────────────────
@@ -400,30 +405,29 @@ pub fn create_invoice_pdf(_data: &DteJson) -> String {
     // ──────────────────────────────────────────────────────────────────────────
     // Comprimir PDF con Ghostscript
     // ──────────────────────────────────────────────────────────────────────────
-    // let output = Command::new("gs")
-    //     .args([
-    //         "-sDEVICE=pdfwrite",
-    //         "-dCompatibilityLevel=1.4",
-    //         "-dPDFSETTINGS=/printer", // Puedes cambiar a /ebook, /printer, /prepress
-    //         "-dNOPAUSE",
-    //         "-dBATCH",
-    //         &format!("-sOutputFile={}", compressed_file_path),
-    //         &file_path,
-    //     ])
-    //     .output()
-    //     .expect("Error ejecutando Ghostscript");
-    // 
-    // eprintln!("🔍 Ghostscript stdout:\n{}", String::from_utf8_lossy(&output.stdout));
-    // eprintln!("🔍 Ghostscript stderr:\n{}", String::from_utf8_lossy(&output.stderr));
-    // 
-    // if !output.status.success() {
-    //     eprintln!("Ghostscript falló con código de salida: {:?}", output.status);
-    // } else {
-    //     println!("PDF comprimido correctamente en {}", compressed_file_path);
-    // }
+    let output = Command::new("gs")
+        .args([
+            "-sDEVICE=pdfwrite",
+            "-dCompatibilityLevel=1.4",
+            "-dPDFSETTINGS=/printer", // Puedes cambiar a /ebook, /printer, /prepress
+            "-dNOPAUSE",
+            "-dBATCH",
+            &format!("-sOutputFile={}", compressed_file_path),
+            &raw_pdf_path,
+        ])
+        .output()
+        .expect("Error ejecutando Ghostscript");
+    
+    eprintln!("🔍 Ghostscript stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("🔍 Ghostscript stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+    
+    if !output.status.success() {
+        eprintln!("Ghostscript falló con código de salida: {:?}", output.status);
+    } else {
+        println!("PDF comprimido correctamente en {}", compressed_file_path);
+    }
 
-    compressed_file_path
-
+    PathBuf::from(compressed_file_path)
 }
 
 fn draw_page_number(

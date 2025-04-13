@@ -7,3 +7,4 @@ pub mod row_info_service;
 pub mod products_service;
 pub mod footer_service;
 pub mod sub_total_service;
+pub mod  email_service;
